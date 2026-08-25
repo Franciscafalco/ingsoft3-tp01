@@ -108,4 +108,38 @@ node                     22-alpine     232MB
 
 ## 4. Imágenes publicadas en el registry
 
-_Pendiente: se agrega después de publicar en ghcr.io (ver `decisiones.md`)._
+Push de las dos imágenes con tag semver `v0.1.0`:
+
+```
+$ docker push ghcr.io/franciscafalco/gastos-backend:v0.1.0
+v0.1.0: digest: sha256:b6207220449dd19fcc73eac69d05eb9301d69c610a4cd1b6fe8e2128ab23716c size: 855
+
+$ docker push ghcr.io/franciscafalco/gastos-frontend:v0.1.0
+v0.1.0: digest: sha256:63add2fff23311b5cff75f5a364a6b616a3be6f4dc2a913faeec2757e5e9f5b9 size: 856
+```
+
+Prueba de que quedaron públicas de verdad: deslogueada de `ghcr.io` y sin la imagen local, el `pull`
+igual funciona:
+
+```
+$ docker logout ghcr.io
+Removing login credentials for ghcr.io
+
+$ docker rmi ghcr.io/franciscafalco/gastos-backend:v0.1.0
+$ docker pull ghcr.io/franciscafalco/gastos-backend:v0.1.0
+v0.1.0: Pulling from franciscafalco/gastos-backend
+Digest: sha256:b6207220449dd19fcc73eac69d05eb9301d69c610a4cd1b6fe8e2128ab23716c
+Status: Downloaded newer image for ghcr.io/franciscafalco/gastos-backend:v0.1.0
+```
+
+Mismo resultado para `gastos-frontend`. Las dos imágenes se ven en la pestaña **Packages** de mi
+perfil de GitHub con visibilidad **Public**.
+
+Y `docker-compose.registry.yml` (usa `image:`, no `build:`) levantando el sistema completo a partir
+de esas imágenes publicadas, sin el código fuente:
+
+```
+$ docker compose -f docker-compose.registry.yml up -d
+$ curl -s localhost:8081/health
+{"status":"ok"}
+```
