@@ -92,3 +92,29 @@ Usé IA (Claude) para prácticamente todo el desarrollo de este TP: definir el a
 
 Cada decisión importante (qué app hacer, con qué stack, qué reglas de negocio, cómo organizar las ramas y PRs, mover la carpeta de trabajo) la charlé y aprobé antes de que se implementara, no dejé que la IA decidiera sola.
 Verifiqué el resultado corriendo yo misma, en la misma sesión, todo el sistema: probé cada regla de negocio con `curl` (monto inválido, fecha futura, categoría inválida, transición de estado prohibida, restricción de borrado), usé la app en el navegador, hice la prueba de persistencia completa (`down` conserva los datos, `down -v` los borra), repetí los pasos de `README.md` desde una corrida limpia (`docker compose down -v` + `.env` nuevo) para confirmar que el arranque documentado funciona tal cual está escrito, y comprobé con mis propias manos (`docker login`, `docker push`, `docker logout`, `docker pull`) que las imágenes publicadas en ghcr.io son realmente públicas.
+
+# TP3 — Planificación y trazabilidad
+
+## Duración del sprint
+
+Elegí **1 semana**. Tenemos una clase por semana en la materia, así que alinear el sprint a esa cadencia hace que cada clase sea, de hecho, el cierre de un sprint: reviso qué quedó hecho, ajusto el plan, y arranco el siguiente. Un sprint más largo (2 semanas) no tendría un punto de revisión natural en el medio.
+
+## Límite de trabajo en progreso
+
+Elegí **2**, siguiendo la regla de arranque de la guía: cantidad de personas + 1. Trabajando sola, eso da 2. El "+1" es la válvula para cuando una tarea queda esperando algo (por ejemplo, una revisión) y necesito poder avanzar en otra sin quedarme bloqueada — pero sin que el límite deje de limitar. Si con el tiempo veo que nunca lo alcanzo, es señal de que está demasiado alto y lo bajaría.
+
+## Diagnóstico de la historia mal escrita
+
+La historia de ejemplo (_"Como desarrollador quiero crear la tabla usuarios para guardar los datos"_) está mal escrita porque es una **tarea disfrazada de historia**: nadie "quiere" una tabla en la base de datos — eso es un detalle de implementación, no un incremento de valor observable para alguien. Le falta el beneficio real (el "para qué" que le importa a un usuario, no a la base de datos) y no es _Valiosa_ en términos de INVEST.
+
+Cómo la reescribiría: la historia real sería algo como _"Como usuario quiero que mis datos se guarden de forma persistente para poder acceder a mi cuenta la próxima vez que entre"_ — con criterios de aceptación verificables (por ejemplo: los datos siguen ahí después de cerrar sesión y volver a entrar). "Crear la tabla usuarios" pasaría a ser una **tarea** dentro de esa historia, no la historia en sí.
+
+## Problemas encontrados y cómo los resolví
+
+- **Mergeé el PR de la tarea #11 sin poner `Closes #11` en la descripción**, así que el issue no se cerró solo al mergear — me di cuenta después. Como el enlace automático solo se procesa en el momento del merge, no se puede agregar después. Lo resolví cerrando el #11 a mano (el trabajo ya estaba terminado) y usé la tarea #12, con un PR nuevo bien enlazado (`Closes #12` en la descripción), para tener la trazabilidad automática que pide el TP.
+
+## Declaración de uso de IA
+
+Usé IA (Claude) para guiarme paso a paso en la configuración de GitHub Projects, para pensar el diagnóstico de la historia mal escrita, y para diagnosticar y corregir el problema de trazabilidad del PR #14 (no cerraba el issue #11 por faltarle `Closes #11` en la descripción).
+
+Las decisiones (duración del sprint, número de WIP) las tomé yo, no la IA. Verifiqué cada paso mirando yo misma el estado del proyecto en GitHub (issues cerrados, jerarquía de sub-issues, board con el sprint asignado) y confirmé que los issues #11 y #12 quedaron cerrados y que el PR #15 cerró el #12 automáticamente.
