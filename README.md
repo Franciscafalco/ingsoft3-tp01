@@ -1,4 +1,4 @@
-# ingsoft3-tp01
+# Proyecto IngSoft3 - versión A
 Repositorio para el tp 01 de la materia Ingeniería de Software
 
 ## Instalación
