@@ -4,6 +4,8 @@ bin/
 obj/
 dist/
 build/
+backend/server
+backend/*.exe
 
 # secretos: NUNCA se versionan
 .env
