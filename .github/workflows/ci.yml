@@ -6,7 +6,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Generar reporte de tests (placeholder, se completa en TP4)
-        run: echo "Reporte de tests: pendiente de implementar en TP4" > test-report.txt
+        run: |
+          echo "Reporte de tests: pendiente de implementar en TP4" > test-report.txt
       - name: Publicar reporte como artefacto
         uses: actions/upload-artifact@v4
         with:
