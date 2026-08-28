@@ -118,3 +118,34 @@ Cómo la reescribiría: la historia real sería algo como _"Como usuario quiero 
 Usé IA (Claude) para guiarme paso a paso en la configuración de GitHub Projects, para pensar el diagnóstico de la historia mal escrita, y para diagnosticar y corregir el problema de trazabilidad del PR #14 (no cerraba el issue #11 por faltarle `Closes #11` en la descripción).
 
 Las decisiones (duración del sprint, número de WIP) las tomé yo, no la IA. Verifiqué cada paso mirando yo misma el estado del proyecto en GitHub (issues cerrados, jerarquía de sub-issues, board con el sprint asignado) y confirmé que los issues #11 y #12 quedaron cerrados y que el PR #15 cerró el #12 automáticamente.
+
+# TP4 — CI: Pipelines as Code
+
+## Estructura del pipeline
+
+Dos jobs, `build-backend` y `build-frontend`, uno por cada Dockerfile del TP2. Van **en paralelo** (no hay `needs:` entre ellos) porque no dependen uno del otro: cada uno construye su propia imagen, en su propia máquina, y no hay ninguna razón para esperar a que termine el otro. Si mi app tuviera un solo Dockerfile, sería un solo job — acá tiene sentido separarlos porque son dos artefactos independientes.
+
+Disparadores: `pull_request` (el que hace el trabajo real, verifica antes del merge) y `push` a `main` (deja la corrida que lee el badge, y es la que le deja cache disponible a cualquier PR nuevo).
+
+## Qué cachea y qué pasa si desaparece
+
+Se cachean las **capas de Docker** de cada Dockerfile: en el backend, `COPY go.mod go.sum` y `RUN go mod download` (no vuelve a bajar dependencias si no cambiaron) y hasta el propio `RUN go build`; en el frontend, `RUN npm ci` y `RUN npm run build`. Cada job tiene su propio `scope` (`backend` / `frontend`) en `cache-from`/`cache-to`, así no se pisan entre sí — lo comprobé corriendo el pipeline dos veces seguidas (un commit vacío después de que la primera corrida terminara) y viendo `CACHED` en esas capas la segunda vez, en los dos jobs.
+
+Si el cache desaparece (la plataforma lo puede desalojar en cualquier momento), el pipeline tiene que funcionar **igual**, solo que más lento: reconstruye todo desde cero. Si fallara sin cache, no era un cache — era una dependencia escondida que dependía de que algo ya estuviera ahí.
+
+## Por qué construye con mi Dockerfile y no compila por su cuenta
+
+Porque ya tengo **una** definición de cómo se compila mi app: el Dockerfile del TP2. Si el pipeline compilara aparte con `go build` directo, tendría dos definiciones de build que tarde o temprano divergen — y estaría verificando algo distinto de lo que después se despliega. Usar el mismo Dockerfile en CI y en despliegue es la garantía de que "lo que se verificó es lo que se corre".
+
+## Problemas encontrados y cómo los resolví
+
+- **El `ci.yml` fallaba en todos los runs, sin excepción.** La causa era un `:` (dos puntos) dentro de un string sin comillas en un paso `run:` (`"Reporte de tests: pendiente..."`) — YAML interpreta ese `:` como si abriera un nuevo par clave-valor, y rompe el archivo entero. Lo confirmé reproduciendo el error con un parser de YAML real (`yq`, corrido en un contenedor) contra la versión vieja del archivo, y until until until— lo arreglé pasando ese comando a un bloque multilínea (`run: |`), que no tiene esa restricción.
+- **Al job `build-backend` se le había quedado sin el paso de `setup-buildx-action` y las líneas de cache**, mientras que `build-frontend` sí las tenía — un desprolijo al copiar la sección de la guía. Sin eso, ese job nunca iba a mostrar `CACHED`. Lo agregué con su propio `scope: backend`, distinto del `frontend`, para que no compartan estante.
+- **Configuré por error un Ruleset de GitHub en vez de editar la regla clásica de `main`** (la del TP1), mientras buscaba activar los status checks obligatorios — la propia guía del TP1 avisa de no usar "Go to rulesets". Lo detecté porque quedaron las dos protecciones superpuestas; borré el Ruleset nuevo y dejé la configuración de required status checks en la regla clásica de siempre.
+- **`gh` y `bat` no se encontraban en la terminal después de instalarlos con `winget`.** Los dos estaban instalados correctamente en disco; el problema era que la terminal ya abierta tenía el PATH viejo en memoria. Se resolvió cerrando y abriendo una terminal nueva.
+
+## Declaración de uso de IA
+
+Usé IA (Claude) para diagnosticar el error de YAML (verificado corriendo `yq` contra el archivo real, no solo mirándolo), detectar que al job del backend le faltaban pasos comparándolo línea por línea con el del frontend, y para armar este mismo archivo.
+
+Verifiqué todo yo misma: corrí `docker build ./backend` en mi máquina para confirmar que el import roto realmente rompía la compilación antes de subirlo, miré las corridas de Actions con mis propios ojos (los checks en rojo, después en verde, `CACHED` en los logs de las dos etapas), y confirmé con GitHub que no quedó ningún PR abierto y que el badge del README apunta bien.
