@@ -1,4 +1,5 @@
-# Proyecto IngSoft3 - versión A
+[![CI](https://github.com/Franciscafalco/ingsoft3-tp01/actions/workflows/ci.yml/badge.svg)](https://github.com/Franciscafalco/ingsoft3-tp01/actions/workflows/ci.yml)
+# Proyecto IngSoft3
 
 Repositorio para los TPs de la materia Ingeniería de Software III.
 
