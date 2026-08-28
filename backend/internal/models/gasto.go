@@ -79,3 +79,5 @@ func ValidarEliminacion(actual Estado) error {
 	}
 	return nil
 }
+
+// TODO: endpoint de gasto
