@@ -88,3 +88,4 @@ npm run dev
 | PUT | `/api/gastos/:id` | Edita un gasto (incluye cambio de estado) |
 | DELETE | `/api/gastos/:id` | Elimina un gasto (no permitido si está `pagado`) |
 | GET | `/api/gastos/resumen` | Total general y total por categoría |
+
