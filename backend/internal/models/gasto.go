@@ -3,6 +3,8 @@ package models
 import (
 	"errors"
 	"time"
+
+	"backend/internal/noexiste" // demo: paquete que no existe, rompe el build a propósito
 )
 
 type Estado string
@@ -79,3 +81,5 @@ func ValidarEliminacion(actual Estado) error {
 	}
 	return nil
 }
+
+// TODO: endpoint de gasto
