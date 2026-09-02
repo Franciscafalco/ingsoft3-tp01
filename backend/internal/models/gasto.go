@@ -81,3 +81,7 @@ func ValidarEliminacion(actual Estado) error {
 }
 
 // TODO: endpoint de gasto
+
+
+
+
