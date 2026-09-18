@@ -104,7 +104,7 @@ jobs:
       - name: Correr los tests del frontend con coverage
         run: |
           mkdir -p frontend-coverage
-          docker run --rm -e COVERAGE_DIR=/salida -v "${{ github.workspace }}/frontend-coverage:/salida" frontend-test:ci
+          docker run --rm -e COVERAGE_DIR=/salida/reporte -v "${{ github.workspace }}/frontend-coverage:/salida" frontend-test:ci
 
       - name: Publicar el reporte de coverage del frontend
         uses: actions/upload-artifact@v6
