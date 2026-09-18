@@ -16,8 +16,8 @@ func main() {
 		log.Fatalf("no se pudo conectar a la base de datos: %v", err)
 	}
 
-	gastosHandler := handlers.NewGastosHandler(database)
-
+	repo := handlers.NewGormGastosRepository(database)
+	gastosHandler := handlers.NewGastosHandler(repo)
 	router := gin.Default()
 
 	router.GET("/health", func(c *gin.Context) {

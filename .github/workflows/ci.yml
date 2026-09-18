@@ -29,6 +29,46 @@ jobs:
           tags: backend:ci # el nombre de la imagen (hoy sólo vive dentro del runner)
           cache-from: type=gha,scope=backend
           cache-to: type=gha,mode=max,scope=backend
+      - name: Construir la etapa de tests del backend
+        uses: docker/build-push-action@v7
+        with:
+          context: ./backend
+          target: test
+          load: true
+          push: false
+          tags: backend-test:ci
+          cache-from: type=gha,scope=backend-test
+          cache-to: type=gha,mode=max,scope=backend-test
+
+      - name: Correr los tests del backend con coverage
+        run: |
+          mkdir -p backend-coverage
+          docker run --rm -v "${{ github.workspace }}/backend-coverage:/out" backend-test:ci
+
+      - name: Preparar Go para verificar el umbral
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+
+      - name: Verificar umbral de cobertura del backend
+        run: |
+          cd backend
+          grep -v -e "repositorio.go" -e "main.go" -e "db.go" \
+            ../backend-coverage/coverage.out > ../backend-coverage/coverage_filtrado.out
+          TOTAL=$(go tool cover -func=../backend-coverage/coverage_filtrado.out | tail -1 | awk '{print $3}' | tr -d '%')
+          UMBRAL=50
+          echo "Cobertura del backend (filtrada): ${TOTAL}% (umbral: ${UMBRAL}%)"
+          if awk -v t="$TOTAL" -v u="$UMBRAL" 'BEGIN { exit !(t < u) }'; then
+            echo "ERROR: cobertura ${TOTAL}% por debajo del umbral ${UMBRAL}%"
+            exit 1
+          fi
+
+      - name: Publicar el reporte de coverage del backend
+        uses: actions/upload-artifact@v6
+        if: ${{ !cancelled() }}
+        with:
+          name: coverage-backend
+          path: backend-coverage
   build-frontend:
     runs-on: ubuntu-latest
     steps:
@@ -51,3 +91,24 @@ jobs:
           tags: frontend:ci
           cache-from: type=gha,scope=frontend
           cache-to: type=gha,mode=max,scope=frontend
+      - name: Construir la etapa de tests del frontend
+        uses: docker/build-push-action@v7
+        with:
+          context: ./frontend
+          target: test
+          load: true
+          push: false
+          tags: frontend-test:ci
+          cache-from: type=gha,scope=frontend-test
+          cache-to: type=gha,mode=max,scope=frontend-test
+      - name: Correr los tests del frontend con coverage
+        run: |
+          mkdir -p frontend-coverage
+          docker run --rm -e COVERAGE_DIR=/salida -v "${{ github.workspace }}/frontend-coverage:/salida" frontend-test:ci
+
+      - name: Publicar el reporte de coverage del frontend
+        uses: actions/upload-artifact@v6
+        if: ${{ !cancelled() }}
+        with:
+          name: coverage-frontend
+          path: frontend-coverage

@@ -14,11 +14,11 @@ import (
 )
 
 type GastosHandler struct {
-	DB *gorm.DB
+	Repo GastosRepository
 }
 
-func NewGastosHandler(db *gorm.DB) *GastosHandler {
-	return &GastosHandler{DB: db}
+func NewGastosHandler(repo GastosRepository) *GastosHandler {
+	return &GastosHandler{Repo: repo}
 }
 
 type gastoRequest struct {
@@ -34,12 +34,8 @@ type gastoUpdateRequest struct {
 }
 
 func (h *GastosHandler) Listar(c *gin.Context) {
-	var gastos []models.Gasto
-	query := h.DB.Order("fecha desc")
-	if categoria := c.Query("categoria"); categoria != "" {
-		query = query.Where("categoria = ?", categoria)
-	}
-	if err := query.Find(&gastos).Error; err != nil {
+	gastos, err := h.Repo.Listar(c.Query("categoria"))
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -47,8 +43,8 @@ func (h *GastosHandler) Listar(c *gin.Context) {
 }
 
 func (h *GastosHandler) Resumen(c *gin.Context) {
-	var gastos []models.Gasto
-	if err := h.DB.Find(&gastos).Error; err != nil {
+	gastos, err := h.Repo.Listar("")
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -74,7 +70,7 @@ func (h *GastosHandler) Crear(c *gin.Context) {
 		Fecha:       req.Fecha,
 		Estado:      models.EstadoPendiente,
 	}
-	if err := h.DB.Create(&gasto).Error; err != nil {
+	if err := h.Repo.Crear(&gasto); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -88,8 +84,8 @@ func (h *GastosHandler) Actualizar(c *gin.Context) {
 		return
 	}
 
-	var gasto models.Gasto
-	if err := h.DB.First(&gasto, id).Error; err != nil {
+	gasto, err := h.Repo.ObtenerPorID(uint(id))
+	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "gasto no encontrado"})
 			return
@@ -119,7 +115,7 @@ func (h *GastosHandler) Actualizar(c *gin.Context) {
 	gasto.Fecha = req.Fecha
 	gasto.Estado = req.Estado
 
-	if err := h.DB.Save(&gasto).Error; err != nil {
+	if err := h.Repo.Guardar(&gasto); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -133,8 +129,8 @@ func (h *GastosHandler) Eliminar(c *gin.Context) {
 		return
 	}
 
-	var gasto models.Gasto
-	if err := h.DB.First(&gasto, id).Error; err != nil {
+	gasto, err := h.Repo.ObtenerPorID(uint(id))
+	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "gasto no encontrado"})
 			return
@@ -148,7 +144,7 @@ func (h *GastosHandler) Eliminar(c *gin.Context) {
 		return
 	}
 
-	if err := h.DB.Delete(&gasto).Error; err != nil {
+	if err := h.Repo.Eliminar(&gasto); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
