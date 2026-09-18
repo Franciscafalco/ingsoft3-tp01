@@ -62,6 +62,13 @@ jobs:
             echo "ERROR: cobertura ${TOTAL}% por debajo del umbral ${UMBRAL}%"
             exit 1
           fi
+                    {
+            echo "### Coverage del backend"
+            echo "| métrica | valor |"
+            echo "|---|---|"
+            echo "| statements (sin infraestructura) | ${TOTAL}% |"
+            echo "| umbral | ${UMBRAL}% |"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Publicar el reporte de coverage del backend
         uses: actions/upload-artifact@v6
@@ -105,6 +112,20 @@ jobs:
         run: |
           mkdir -p frontend-coverage
           docker run --rm -e COVERAGE_DIR=/salida/reporte -v "${{ github.workspace }}/frontend-coverage:/salida" frontend-test:ci
+
+            - name: Resumen del coverage del frontend
+        if: ${{ !cancelled() }}
+        run: |
+          F=frontend-coverage/reporte/coverage-summary.json
+          test -f "$F"
+          node -e "
+            const t = require('./$F').total;
+            if (!t.lines.total) { console.error('midió 0 archivos: revisá el include'); process.exit(1); }
+            const f = (m) => \`| \${m} | \${t[m].pct}% |\`;
+            console.log('### Coverage del frontend');
+            console.log('| métrica | % |'); console.log('|---|---|');
+            console.log(f('lines')); console.log(f('branches')); console.log(f('functions'));
+          " >> $GITHUB_STEP_SUMMARY
 
       - name: Publicar el reporte de coverage del frontend
         uses: actions/upload-artifact@v6
