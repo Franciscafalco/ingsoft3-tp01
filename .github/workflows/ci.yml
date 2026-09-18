@@ -29,6 +29,7 @@ jobs:
           tags: backend:ci # el nombre de la imagen (hoy sólo vive dentro del runner)
           cache-from: type=gha,scope=backend
           cache-to: type=gha,mode=max,scope=backend
+
       - name: Construir la etapa de tests del backend
         uses: docker/build-push-action@v7
         with:
@@ -58,17 +59,17 @@ jobs:
           TOTAL=$(go tool cover -func=../backend-coverage/coverage_filtrado.out | tail -1 | awk '{print $3}' | tr -d '%')
           UMBRAL=50
           echo "Cobertura del backend (filtrada): ${TOTAL}% (umbral: ${UMBRAL}%)"
-          if awk -v t="$TOTAL" -v u="$UMBRAL" 'BEGIN { exit !(t < u) }'; then
-            echo "ERROR: cobertura ${TOTAL}% por debajo del umbral ${UMBRAL}%"
-            exit 1
-          fi
-                    {
+          {
             echo "### Coverage del backend"
             echo "| métrica | valor |"
             echo "|---|---|"
             echo "| statements (sin infraestructura) | ${TOTAL}% |"
             echo "| umbral | ${UMBRAL}% |"
           } >> "$GITHUB_STEP_SUMMARY"
+          if awk -v t="$TOTAL" -v u="$UMBRAL" 'BEGIN { exit !(t < u) }'; then
+            echo "ERROR: cobertura ${TOTAL}% por debajo del umbral ${UMBRAL}%"
+            exit 1
+          fi
 
       - name: Publicar el reporte de coverage del backend
         uses: actions/upload-artifact@v6
@@ -76,6 +77,7 @@ jobs:
         with:
           name: coverage-backend
           path: backend-coverage
+
   build-frontend:
     runs-on: ubuntu-latest
     steps:
@@ -98,6 +100,7 @@ jobs:
           tags: frontend:ci
           cache-from: type=gha,scope=frontend
           cache-to: type=gha,mode=max,scope=frontend
+
       - name: Construir la etapa de tests del frontend
         uses: docker/build-push-action@v7
         with:
@@ -108,12 +111,13 @@ jobs:
           tags: frontend-test:ci
           cache-from: type=gha,scope=frontend-test
           cache-to: type=gha,mode=max,scope=frontend-test
+
       - name: Correr los tests del frontend con coverage
         run: |
           mkdir -p frontend-coverage
           docker run --rm -e COVERAGE_DIR=/salida/reporte -v "${{ github.workspace }}/frontend-coverage:/salida" frontend-test:ci
 
-            - name: Resumen del coverage del frontend
+      - name: Resumen del coverage del frontend
         if: ${{ !cancelled() }}
         run: |
           F=frontend-coverage/reporte/coverage-summary.json
