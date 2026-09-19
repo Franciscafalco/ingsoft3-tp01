@@ -9,7 +9,11 @@ RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 go build -o /app/server .
 
-# ---- Etapa 2: runtime (imagen mínima, sin el SDK) ----
+# ---- Etapa 2: tests (parte del build, con el SDK adentro) ----
+FROM build AS test
+ENTRYPOINT ["go", "test", "./...", "-coverprofile=/out/coverage.out"]
+
+# ---- Etapa 3: runtime (imagen mínima, sin el SDK) ----
 FROM alpine:3.20 AS final
 LABEL org.opencontainers.image.source=https://github.com/Franciscafalco/ingsoft3-tp01
 WORKDIR /app

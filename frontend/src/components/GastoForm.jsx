@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { CATEGORIAS } from '../constants'
-
-const hoy = () => new Date().toISOString().slice(0, 10)
+import { hoy, validarMonto, validarFecha } from '../lib/validarGasto'
 
 const vacio = {
   monto: '',
@@ -15,8 +14,8 @@ export default function GastoForm({ onCrear }) {
   const [error, setError] = useState(null)
   const [enviando, setEnviando] = useState(false)
 
-  const montoInvalido = form.monto !== '' && Number(form.monto) <= 0
-  const fechaFutura = form.fecha > hoy()
+  const montoInvalido = form.monto !== '' && !validarMonto(form.monto).valido
+  const fechaFutura = !validarFecha(form.fecha).valido
   const puedeEnviar = form.monto !== '' && !montoInvalido && !fechaFutura && !enviando
 
   function actualizarCampo(campo, valor) {

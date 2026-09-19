@@ -16,3 +16,9 @@ backend/*.exe
 Thumbs.db
 .vscode/
 .idea/
+
+# coverage generado
+backend/coverage.out
+backend/coverage_filtrado.out
+backend/coverage-local/
+frontend/coverage/

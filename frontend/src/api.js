@@ -17,8 +17,8 @@ export function obtenerResumen() {
   return fetch(`${BASE_URL}/resumen`).then(handleResponse)
 }
 
-export function crearGasto(gasto) {
-  return fetch(BASE_URL, {
+export function crearGasto(gasto, fetcher = fetch) {
+  return fetcher(BASE_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(gasto),
