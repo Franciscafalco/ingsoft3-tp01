@@ -9,4 +9,12 @@ export default defineConfig({
       '/api': 'http://localhost:8080',
     },
   },
+  test: {
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'html', 'json-summary'],
+      include: ['src/lib/**', 'src/api.js'],
+      thresholds: { lines: 55, branches: 45 },
+    },
+  },
 })
