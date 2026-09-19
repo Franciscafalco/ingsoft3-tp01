@@ -149,3 +149,88 @@ Porque ya tengo **una** definición de cómo se compila mi app: el Dockerfile de
 Usé IA (Claude) para diagnosticar el error de YAML (verificado corriendo `yq` contra el archivo real, no solo mirándolo), detectar que al job del backend le faltaban pasos comparándolo línea por línea con el del frontend, y para armar este mismo archivo.
 
 Verifiqué todo yo misma: corrí `docker build ./backend` en mi máquina para confirmar que el import roto realmente rompía la compilación antes de subirlo, miré las corridas de Actions con mis propios ojos (los checks en rojo, después en verde, `CACHED` en los logs de las dos etapas), y confirmé con GitHub que no quedó ningún PR abierto y que el badge del README apunta bien.
+
+# TP5 — Testing y calidad
+
+## Qué lógica elegí testear y por qué esa
+
+Testeé las reglas de negocio, porque es donde un bug duele de verdad en una app de gestor de gastos: un monto en cero o negativo que se guarda, un gasto "pagado" que vuelve a "pendiente" o que se borra, o un resumen que suma mal. Por eso:
+
+- Backend, 'models/gasto.go': validar (monto > 0, categoría válida, fecha no futura), 'ValidarTransicion' (pagado -> pendiente prohibido) y `ValidarEliminacion` (no se borra un gasto pagado). Cada una es una regla distinta, con tabla de casos y bordes.
+- Backend, `service/resumen.go`: `CalcularResumen`, el cálculo de totales. Un error acá muestra plata incorrecta sin que nada falle.
+- Backend, `handlers/gastos.go`: los handlers con un repositorio falso (ver el mock más abajo).
+- Frontend: `lib/validarGasto.js` (`validarMonto`, `validarFecha`) y `api.js` (`crearGasto`), que es la pieza del front que habla con el backend.
+
+Backend: 10 funciones de test, todas con estructura AAA, con tablas parametrizadas (`t.Run`) y casos de error. Frontend: parametrizados con `it.each`, casos de error y un test con mock.
+
+## Refactor para poder mockear
+
+**Backend.** Antes, los handlers hablaban directo con `*gorm.DB`, así que para testearlos hacía falta una base real. Extraje una interfaz `GastosRepository` (`Listar`, `ObtenerPorID`, `Crear`, `Guardar`, `Eliminar`) con un adaptador `GormGastosRepository` que envuelve a GORM. `GastosHandler` recibe el repositorio por campo (`Repo`) y `main.go` inyecta el real. Los tests usan `RepositorioMock` (testify/mock). Lo que verifican con `AssertCalled` / `AssertNotCalled` es la **interacción**: por ejemplo, que si la transición de estado es inválida el handler no llama a `Guardar`, y que un gasto pagado no llega a `Eliminar`. Eso es un mock y no un stub, porque el assert es sobre las llamadas y no sólo sobre lo que devuelve.
+
+**Frontend.** `crearGasto(gasto, fetcher = fetch)` recibe el cliente HTTP como parámetro con `fetch` por defecto. El test le pasa un `vi.fn()` y verifica con `toHaveBeenCalledWith` que se llame a `POST /api/gastos` con el cuerpo esperado, sin salir a la red.
+
+Los tests de Go corren en una etapa `test` del Dockerfile y los de Vitest en otra, igual que el build: se prueba con la misma definición que se despliega.
+
+## Umbral de cobertura: el número, la métrica y por qué
+
+|          | Métrica del umbral              | Umbral                 | Hoy (main, [run](https://github.com/Franciscafalco/ingsoft3-tp01/actions/runs/35439252960)) | Ramas hoy               |
+| -------- | ------------------------------- | ---------------------- | ------------------------------------------------------------------------------------------- | ----------------------- |
+| Backend  | statements (Go no mide ramas)   | 50%                    | 57.0%                                                                                       | no existe en Go         |
+| Frontend | líneas + ramas (las dos frenan) | 55% líneas / 45% ramas | 81.25% líneas                                                                               | 84% (funciones: 54.54%) |
+
+- **Por qué esos números.** Están puestos contra mi medición real, sin copiarlos de ningún ejemplo, y por debajo de ella: dejan margen para el ruido normal y caen apenas se agrega código nuevo sin tests. Lo comprobé en el PR B: sumar un archivo de 32 líneas sin tests bajó el frontend a **47.27% de líneas** y el build se puso en rojo.
+- **Por qué líneas y ramas en el front.** Las líneas dicen cuánto código se ejecutó. Las ramas dicen si se recorrieron los dos lados de cada `if`, y una función puede tener 100% de líneas con un `if` de un solo lado.
+- **Por qué el backend sólo en statements.** `go test -cover` mide sentencias y no ramas; no hay forma nativa de medir ramas en Go.
+- **Qué haría falta para subirlo.** Testear el resto de `api.js` (las funciones de listar, actualizar y eliminar están sin cubrir: líneas 5-6, 13-17 y 29-37) y los handlers que todavía no tienen test. No lo subo a ciegas porque un umbral por encima de lo que puedo sostener sólo empuja a escribir tests para llegar al número.
+
+## Qué dejé afuera de la cuenta y por qué
+
+**Backend** (filtrado con `grep -v` sobre `coverage.out` antes de calcular el total):
+
+- `handlers/repositorio.go`: el adaptador que sólo traduce llamadas a GORM. Probarlo exige una base real, es un test de integración y no unitario.
+- `main.go`: el arranque (levantar el servidor y cablear dependencias).
+- `db.go`: la conexión a PostgreSQL.
+
+**Frontend** (`coverage.include`): sólo `src/lib/**` y `src/api.js`. Quedan afuera los componentes React y el arranque (`main.jsx`), porque probarlos exige DOM/E2E, que no es lo que pide este TP.
+
+**Riesgo de esta decisión:** con `include`, un archivo nuevo fuera de esas rutas no entra en la cuenta y no puede frenar el build. Lo asumo porque la lógica de negocio vive en `lib/`, pero es un punto ciego.
+
+## Por qué coverage alto no garantiza calidad (con mi ejemplo)
+
+La cobertura mide qué líneas **se ejecutaron**, no si alguien **comprobó** algo. Con mi propio código: un test `validarFecha('2020-01-01')` sin ningún `expect` ejecuta la línea, sube el porcentaje y no verifica nada, y aunque `validarFecha` devolviera `true` siempre, ese test seguiría en verde. Lo que sí protege es el assert del borde: la fila `'0' → inválido` de `validarMonto` se pondría en rojo si alguien cambiara `> 0` por `>= 0`. Coverage dice dónde **no** miré, pero no dice que lo que miré esté bien.
+
+## Mi Pull Request bloqueado: la secuencia completa (PR A)
+
+1. Agregué `clasificarGasto.js` **sin tests**. Compilaba perfecto y todos los tests existentes pasaban.
+2. `build-frontend` se puso en **rojo por cobertura**. El log dice literalmente `ERROR: Coverage for lines (31.25%) does not meet global threshold (55%)` y `ERROR: Coverage for branches (20%) does not meet global threshold (45%)`. Corrida roja: https://github.com/Franciscafalco/ingsoft3-tp01/actions/runs/35438814350
+3. Escribí `clasificarGasto.test.js` (parametrizado, 8 casos entre bordes y niveles).
+4. El check quedó en verde (frontend 81.25% líneas / 84% ramas). Corrida verde con el resumen de coverage y el reporte descargable: https://github.com/Franciscafalco/ingsoft3-tp01/actions/runs/35439124138
+5. Squash and merge. La conversación completa (rojo → tests → verde → merge) está en https://github.com/Franciscafalco/ingsoft3-tp01/pull/25
+
+**Es distinto del freno del TP4.** Aquel frenaba porque el código no compilaba; éste frena código que compila y con la suite en verde, porque la cantidad de código verificado bajó. Lo que este gate **deja pasar igual**: tests sin asserts, o lógica equivocada que quedó bien cubierta.
+
+**PR B, el freno vigente:** https://github.com/Franciscafalco/ingsoft3-tp01/pull/26 (abierto y en rojo hasta la defensa, con `resumenMensual.js` sin tests a propósito). `build-backend` pasa y `build-frontend` falla con `Coverage for lines (47.27%) does not meet global threshold (55%)`. Ahí se ve que frena por **líneas**: las ramas (48.83%) pasan el 45%. Run: https://github.com/Franciscafalco/ingsoft3-tp01/actions/runs/35439520171
+
+Los checks `build-backend` y `build-frontend` son _required_ en la protección de `main` (con "require branches to be up to date" y `enforce_admins`), así que ni yo como dueña puedo mergear el PR B.
+
+## El ejercicio del camino sin cubrir
+
+Al abrir el reporte de cobertura, `validarGasto.js` mostraba una línea sin cubrir:
+
+- **Qué línea es:** la línea 6, `if (monto === '') return { valido: true }` (`validarMonto`, la rama del campo vacío).
+- **Qué entrada la recorre:** `validarMonto('')`. Hasta entonces sólo probaba `'100'`, `'0'` y `'-50'`.
+- **Qué decidí:** la **agregué** como una fila más del `it.each` (`'un monto vacío se considera válido'`, `'' → true`). Un campo vacío no es inválido sino "todavía no completado", es una decisión de diseño del formulario, y si alguien la cambia por error tiene que ponerse algo en rojo.
+
+## Problemas encontrados y cómo los resolví
+
+- **El paso "Resumen del coverage" y el job del backend no se veían cuando fallaba el test/umbral.** El resumen del backend estaba después del `exit 1`, y en el frontend el paso perdió su `if: ${{ !cancelled() }}`. Moví la escritura de la tabla **antes** de la verificación y restauré el `if`, para que el número se vea justo cuando más importa: cuando algo falla.
+- **`workflow file issue` con corrida de 0 s.** Pegué un paso del `ci.yml` con una sangría de más y quedó un `run` duplicado, así que el YAML era inválido. GitHub no ejecuta nada en ese caso. Re-alineé los pasos.
+- **`EBUSY: rmdir '/salida'` en el frontend.** Vitest intenta borrar la carpeta de reportes antes de escribir y no puede borrar un punto de montaje del volumen. Escribo en una subcarpeta (`COVERAGE_DIR=/salida/reporte`).
+- **Vitest medía sólo lo importado.** Desde la versión 4 sólo se miden los archivos que algún test importa, así que un archivo sin tests no bajaba el número. Definí `coverage.include` para que cuente todo lo de `lib/` y `api.js`.
+- **Se me colaron archivos de coverage y un `package.json` en el commit.** Los saqué del stage y sumé `backend/coverage*.out`, `backend/coverage-local/` y `frontend/coverage/` al `.gitignore`.
+
+## Declaración de uso de IA
+
+Usé IA (Claude) como guía paso a paso: me explicó cada concepto (mock vs stub, cobertura por statements vs ramas, quality gate), me dio el código base de los tests y del refactor con la interfaz de repositorio, y me ayudó a diagnosticar los problemas de arriba. Yo escribí y ejecuté cada cambio en mi máquina.
+
+Cómo lo verifiqué: corrí las suites localmente (backend y frontend) antes de cada push; miré los checks en Actions, incluyendo los rojos por umbral (leí el número en el log de cada uno), y el flujo rojo → verde del PR A. Puedo explicar qué verifica cada assert. Los casos que **no** están cubiertos son los listados arriba: las funciones de listar/actualizar/eliminar de `api.js` y las partes de los handlers sin test; eso es lo que explica que el frontend tenga 54.54% de funciones y que el backend filtrado esté en 57%.
