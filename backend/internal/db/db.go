@@ -14,12 +14,13 @@ import (
 // para que la misma imagen sirva en cualquier entorno sin recompilar.
 func Connect() (*gorm.DB, error) {
 	dsn := fmt.Sprintf(
-		"host=%s user=%s password=%s dbname=%s port=%s sslmode=disable",
+		"host=%s user=%s password=%s dbname=%s port=%s sslmode=%s",
 		getEnv("DB_HOST", "localhost"),
 		getEnv("DB_USER", "postgres"),
 		getEnv("DB_PASSWORD", "postgres"),
 		getEnv("DB_NAME", "app"),
 		getEnv("DB_PORT", "5432"),
+		getEnv("DB_SSLMODE", "disable"),
 	)
 
 	database, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
