@@ -1,3 +1,37 @@
+# Enlaces de este TP (TP6)
+
+**Paquetes públicos** (etiquetados con el commit del merge del PR #29, `0b5d31a`; bajan sin credenciales, comprobado con `docker logout ghcr.io`):
+
+- Backend: https://github.com/Franciscafalco/ingsoft3-tp01/pkgs/container/ingsoft3-tp01-backend
+- Frontend: https://github.com/Franciscafalco/ingsoft3-tp01/pkgs/container/ingsoft3-tp01-frontend
+
+```bash
+docker pull --platform linux/amd64 ghcr.io/franciscafalco/ingsoft3-tp01-backend:sha-0b5d31a2860d6c5c2618789270bc70274b18b980
+docker pull --platform linux/amd64 ghcr.io/franciscafalco/ingsoft3-tp01-frontend:sha-0b5d31a2860d6c5c2618789270bc70274b18b980
+```
+
+**La cadena que hace confiable al registry** (los tres eslabones):
+
+1. Sólo `main` publica: corrida de un PR con los tests en verde donde «Entrar al registry» aparece **salteado** (PR #29): https://github.com/Franciscafalco/ingsoft3-tp01/actions/runs/36172757186/job/108196027853
+2. Publicar es el último paso del job que testea: corrida de `main` (merge del PR #29), donde «Construir y publicar la imagen» es el último paso propio, después de los tests: https://github.com/Franciscafalco/ingsoft3-tp01/actions/runs/36173051830
+
+**Entornos vivos** (Render + Neon):
+
+|      | Front                                  | API                                         |
+| ---- | -------------------------------------- | ------------------------------------------- |
+| QA   | https://gastos-front-qa.onrender.com   | https://gastos-api-qa.onrender.com/health   |
+| PROD | https://gastos-front-prod.onrender.com | https://gastos-api-prod.onrender.com/health |
+
+**Otras pruebas navegables:**
+
+- Historial de deployments (qué commit está en cada entorno): https://github.com/Franciscafalco/ingsoft3-tp01/deployments
+- Deploy automático a QA tras el merge (PR #32): https://github.com/Franciscafalco/ingsoft3-tp01/actions/runs/36191563514
+- **Rechazo con motivo** (PR #34, `deploy-prod` en failure): https://github.com/Franciscafalco/ingsoft3-tp01/actions/runs/36456696888
+- **Aprobación con cambio visible** (PR #35, PROD desplegado y smoke verde): https://github.com/Franciscafalco/ingsoft3-tp01/actions/runs/36457402390
+- Release: https://github.com/Franciscafalco/ingsoft3-tp01/releases/tag/v6.0.0
+
+---
+
 # TP1 — Git colaborativo
 
 ## Por qué Git no pudo resolver el conflicto solo
@@ -234,3 +268,29 @@ Al abrir el reporte de cobertura, `validarGasto.js` mostraba una línea sin cubr
 Usé IA (Claude) como guía paso a paso: me explicó cada concepto (mock vs stub, cobertura por statements vs ramas, quality gate), me dio el código base de los tests y del refactor con la interfaz de repositorio, y me ayudó a diagnosticar los problemas de arriba. Yo escribí y ejecuté cada cambio en mi máquina.
 
 Cómo lo verifiqué: corrí las suites localmente (backend y frontend) antes de cada push; miré los checks en Actions, incluyendo los rojos por umbral (leí el número en el log de cada uno), y el flujo rojo → verde del PR A. Puedo explicar qué verifica cada assert. Los casos que **no** están cubiertos son los listados arriba: las funciones de listar/actualizar/eliminar de `api.js` y las partes de los handlers sin test; eso es lo que explica que el frontend tenga 54.54% de funciones y que el backend filtrado esté en 57%.
+
+# TP6 — CD: environments, aprobaciones y deployment patterns
+
+**Artefacto sólo con verde.** El pipeline publica las dos imágenes en `ghcr.io` como `sha-<commit>` bajo tres eslabones encadenados: (1) nada entra a `main` sin los checks en verde (TP4 + cobertura del TP5); (2) sólo `main` publica (`push: … && github.ref == 'refs/heads/main'`); (3) publicar es el **último** paso del mismo job que corre los tests, así que si algo falla el job muere antes (la condición es el orden, no un `if`). Si se publicara igual con tests en rojo, estar en el registry dejaría de significar «pasó la verificación». La cadena garantiza lo que publica el pipeline, no lo que puede entrar (un `docker push` a mano entra igual); lo inmutable es el digest (`sha256:d2f171f2…` backend, `sha256:e42ca661…` frontend), no el tag. `packages: write` va dentro de cada job (mínimo privilegio) y se usa el `GITHUB_TOKEN`, sin secrets nuevos.
+
+**Delivery vs Deployment.** Implementé **Continuous Delivery**: QA se despliega solo y PROD requiere aprobación humana. No hago Deployment porque mi red de seguridad no alcanza (umbrales de cobertura 50% back y 55%/45% front, handlers sin test, sin monitoreo); me faltaría cobertura, observabilidad (TP9) y rollback automático.
+
+**Cadena y secrets.** `build-backend`/`build-frontend` → `deploy-qa` (`needs` ambos, `if: main`, `environment: qa`) → `deploy-prod` (`needs: deploy-qa`, `environment: production`). `deploy-prod` no repite el `if`: lo hereda, y en un PR ambos se saltean. Los hooks de QA viven en el environment `qa` y los de PROD en `production`: un job de QA no los ve y uno de PROD sólo los lee **después de aprobar**. Ambos hooks llevan `&ref=$GITHUB_SHA`: sin él se despliega la punta de la rama, no el commit verificado (más grave en PROD, donde entre la espera y la aprobación `main` puede moverse). `concurrency: deploy-prod` evita dos deploys pisándose, pero no ordena la cola de aprobaciones: si apruebo una corrida vieja, PROD retrocede; la regla es rechazar la vieja a mano. Fijé `ubuntu-24.04` en vez de `latest` (GitHub lo migra a Ubuntu 26 el 19/10/2026) para que el pipeline sea reproducible.
+
+**Qué mira mi aprobador.** (1) Los tres jobs previos en verde en **esa** corrida; (2) que QA corra ese commit (el smoke exige que `/health` lo informe); (3) qué cambia: app, configuración/base o sólo pipeline/docs; (4) que no haya una corrida más nueva esperando; (5) que el cambio se pueda ver en la URL de PROD. No puede ver: comportamiento con tráfico real, errores ni latencia (me falta observabilidad). **Rechazo:** PR #34 (`2b2a59c`), motivo «trae un parrafo nuevo», dejé el gate diciendo «no» y aprobé el cambio visible en el deploy siguiente; el job quedó `failure` y PROD no se movió. **Aprobación:** PR #35 (`35b8e31`), QA verde, cambio visible, smoke de PROD verde.
+
+**Free tier.** Render duerme a los ~15 min: medí ~13 s de cold start en la api, y la primera carga del front dio `Error 502` hasta que despertó; por eso el smoke reintenta (30 × 20 s, `--max-time 10`). Las 750 h/mes son del workspace (4 servicios), por eso no dejo pings. Minutos de build: **5 de 500** usados al 28/09/2026 (Billing); cada deploy por hook tarda 24–33 s. Neon suspende a los ~5 min y limita a 0,5 GB; no usé el Postgres de Render porque expira a los 30 días.
+
+**Qué pierdo porque Render reconstruye.** No corre la imagen verificada de `ghcr.io`: vuelve a construir mi Dockerfile en el commit de `&ref`. Promuevo el mismo _commit_, no la misma _imagen_; una dependencia o imagen base podría cambiar entre un build y otro. El TP7 lo cierra.
+
+**Qué prueba el smoke y qué no.** Prueba que el proceso vive, que corre el commit esperado (`/health` devuelve `RENDER_GIT_COMMIT` y el smoke falla si no coincide con `github.sha`, así no da verde contra la versión vieja), que la base responde (`/api/gastos`) y que el front se sirve. No prueba la lógica de negocio (sólo `GET`), ni que corra la imagen del registry, ni performance ni datos.
+
+**Patrón para producción real y rollback.** Elegiría **blue-green + feature flags**: con usuarios reales una hora caída cuesta más que un segundo entorno, y el switch da rollback casi instantáneo; costo 2× infraestructura, y las dos versiones comparten la base (mi `AutoMigrate` sólo agrega columnas). Los flags separan deploy de release. Descarté canary porque necesita métricas por versión que no tengo. **Rollback actual:** disparar el mismo hook de PROD (api y front) con `&ref=<sha-bueno-anterior>` y esperar _Live_ en _Deploys_ (no en `/health`). **Medido:** de `35b8e31` a `de82f9e`, el deploy de la api se inició a las 2:44:05 PM, duró 28,0 s y quedó Live a las 2:44:33 PM (≈ 34 s desde que arranqué el cronómetro); el front tardó 29,1 s. **No deshace los datos:** los gastos cargados y cualquier cambio de esquema ya aplicado siguen ahí. Además, el rollback por hook saltea el gate humano (el hook es un secreto que despliega sin aprobación).
+
+**Stack y nube.** Registry: `docker/build-push-action` + `login-action` → `ghcr.io`; etiqueta `:sha-${{ github.sha }}`; environments `qa`/`production` con _required reviewers_ y environment secrets; deploy por hooks de Render con `&ref`; una base por entorno en Neon (`app_qa`, `app_prod`); esquema con `AutoMigrate` de GORM; smoke con `curl` en loop; release con `gh release create v6.0.0`. Conexión por `DB_HOST/USER/PASSWORD/PORT/NAME/SSLMODE`, `/health` y `/api/gastos` como endpoints de vida y de base, front en `nginx:alpine` con `BACKEND_URL` y `DNS_RESOLVER` leídas al arrancar. **Contrato de 5 puntos:** dos entornos con URL pública, una base cada uno, contenedores desde mis Dockerfiles, deploy disparado por el pipeline con Auto-Deploy en Off, PROD detrás de la aprobación. **Variable vs imagen:** la dirección del backend, el DNS y `DB_*` van por variable; estáticos, binario y plantilla de nginx van en la imagen. Prueba: QA y PROD sirven el mismo bundle (`index-BLSf4ykf.js`) y cada uno habla con su api.
+
+**Cómo lo comprobé.** Bases separadas: inserté `SOY PROD` sólo en `app_prod` desde el SQL Editor de Neon y aparece en el front de PROD y no en el de QA. Auto-Deploy está en **Off** en los cuatro servicios y los deploys posteriores a la creación figuran con _Trigger: Deploy Hook_. Los hooks de PROD despliegan `gastos-api-prod` y `gastos-front-prod` (comparé el `srv-…` de cada hook con el de la URL del servicio).
+
+**Problemas y cómo los resolví.** (1) `repository name must be lowercase`: escribí `ghcr.io/franciscafalco/…` a mano. (2) Puse `id-token: write` en vez de `packages: write`. (3) `deploy-qa` y `deploy-prod` me quedaron con 4 espacios, anidados, y `yq` listaba dos jobs; los corregí a 2. (4) Neon exige SSL y `db.go` tenía `sslmode=disable`: lo pasé a `DB_SSLMODE`. (5) Render: `failed to read dockerfile: … is a directory` por un _Dockerfile Path_ duplicado con el Root Directory. (6) `Error 502` inicial: cold start de la api. (7) Apreté _Approve_ en vez de _Reject_: la revisión no se edita, así que generé otra corrida (PR #34) para el rechazo.
+
+**Declaración de IA.** Usé Claude como guía paso a paso: me explicó los conceptos y me dio el código base de los cambios (workflow, `db.go`, `main.go`, plantilla de nginx, Dockerfile). Yo escribí y ejecuté cada cambio y creé las cuentas y servicios de Render y Neon. Verifiqué leyendo cada corrida en Actions, con `curl` a `/health` de QA y PROD, comparando los bundles, con `docker pull` sin credenciales tras `docker logout` y midiendo el rollback en _Deploys_. Puedo explicar qué pasa entre el merge y PROD: cada compuerta, cada secret y cada espera.
