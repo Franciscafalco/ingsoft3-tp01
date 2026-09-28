@@ -75,6 +75,7 @@ export default function App() {
     <div className="app">
       <header>
         <h1>Gestor de gastos personales</h1>
+        <p>Control de gastos</p>
         <nav className="tabs">
           <button
             type="button"
