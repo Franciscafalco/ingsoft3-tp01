@@ -1,4 +1,34 @@
-# Enlaces de este TP (TP6)
+# Enlaces del TP7
+
+**Paquetes públicos** (imagen etiquetada con el commit, bajan sin credenciales; la de la release es la `sha-` de `git rev-list -n1 v7.0.0`):
+
+- Backend: https://github.com/Franciscafalco/ingsoft3-tp01/pkgs/container/ingsoft3-tp01-backend
+- Frontend: https://github.com/Franciscafalco/ingsoft3-tp01/pkgs/container/ingsoft3-tp01-frontend
+- Ejemplos de etiquetas que corrieron en PROD: `sha-8d0f9b8a93ab5507feeeac12844d619bfaff7c0e` (primer deploy por `imgURL`) y `sha-289687e6670f6fd4b14f4f2b0b70279563d08a13` (corrida verde final).
+
+**La rotura: integración VERDE y e2e ROJA frenando la promoción:**
+
+- Commit que rompió la app (PR #39, sólo toca `GastoForm.jsx`): https://github.com/Franciscafalco/ingsoft3-tp01/commit/270186fa80305dfe5ccab268c8ae386cc9c08e54
+- Corrida (smoke ✅, integración ✅, e2e ❌, `deploy-prod` salteado): https://github.com/Franciscafalco/ingsoft3-tp01/actions/runs/38407865199
+- Reporte de integración (verde): https://github.com/Franciscafalco/ingsoft3-tp01/actions/runs/38407865199/artifacts/11819349305
+- Reporte e2e (rojo, con captura y traza): https://github.com/Franciscafalco/ingsoft3-tp01/actions/runs/38407865199/artifacts/11819966105
+
+**Corrida completa en verde hasta PROD** (QA → smoke → integración → e2e → aprobación → PROD, misma imagen): https://github.com/Franciscafalco/ingsoft3-tp01/actions/runs/38413427334
+
+**Otras corridas:** primera cadena por imagen (PR #37): https://github.com/Franciscafalco/ingsoft3-tp01/actions/runs/38397536217 · gate de pruebas (PR #38): https://github.com/Franciscafalco/ingsoft3-tp01/actions/runs/38405872117
+
+**Entornos vivos:**
+
+|      | Front                                  | API                                         |
+| ---- | -------------------------------------- | ------------------------------------------- |
+| QA   | https://gastos-front-qa.onrender.com   | https://gastos-api-qa.onrender.com/health   |
+| PROD | https://gastos-front-prod.onrender.com | https://gastos-api-prod.onrender.com/health |
+
+**Release:** https://github.com/Franciscafalco/ingsoft3-tp01/releases/tag/v7.0.0
+
+---
+
+# Enlaces del TP6
 
 **Paquetes públicos** (etiquetados con el commit del merge del PR #29, `0b5d31a`; bajan sin credenciales, comprobado con `docker logout ghcr.io`):
 
@@ -294,3 +324,29 @@ Cómo lo verifiqué: corrí las suites localmente (backend y frontend) antes de 
 **Problemas y cómo los resolví.** (1) `repository name must be lowercase`: escribí `ghcr.io/franciscafalco/…` a mano. (2) Puse `id-token: write` en vez de `packages: write`. (3) `deploy-qa` y `deploy-prod` me quedaron con 4 espacios, anidados, y `yq` listaba dos jobs; los corregí a 2. (4) Neon exige SSL y `db.go` tenía `sslmode=disable`: lo pasé a `DB_SSLMODE`. (5) Render: `failed to read dockerfile: … is a directory` por un _Dockerfile Path_ duplicado con el Root Directory. (6) `Error 502` inicial: cold start de la api. (7) Apreté _Approve_ en vez de _Reject_: la revisión no se edita, así que generé otra corrida (PR #34) para el rechazo.
 
 **Declaración de IA.** Usé Claude como guía paso a paso: me explicó los conceptos y me dio el código base de los cambios (workflow, `db.go`, `main.go`, plantilla de nginx, Dockerfile). Yo escribí y ejecuté cada cambio y creé las cuentas y servicios de Render y Neon. Verifiqué leyendo cada corrida en Actions, con `curl` a `/health` de QA y PROD, comparando los bundles, con `docker pull` sin credenciales tras `docker logout` y midiendo el rollback en _Deploys_. Puedo explicar qué pasa entre el merge y PROD: cada compuerta, cada secret y cada espera.
+
+# TP7 — Contenedores en el pipeline + integración y e2e
+
+**Build once, deploy many.** En el TP6 Render reconstruía mi app en cada deploy: el build de QA y el de PROD (horas o días después, tras la aprobación) resolvían `golang`, `nginx:alpine` o `alpine` por separado, así que podían salir distintos aunque el commit fuera el mismo. Ahora el pipeline construye **una** vez, publica `sha-<commit>` y los cuatro servicios _Existing Image_ ejecutan esa imagen; el hook lleva `imgURL` y se sacó el `&ref=`. No creé servicios nuevos, cambié la fuente de los existentes, así que se conservaron URL, variables y hooks.
+
+**Etiquetas.** `sha-<commit>` (registry) identifica de qué commit salió la imagen; `v7.0.0` (git) nombra la versión que corrió en PROD. No publico `latest`: es un puntero que se mueve y después no podría decir qué desplegué. Un tag se puede volver a publicar; lo inmutable es el digest, y el _Source_ de Render lo muestra (`bfbf192` en las apis, `ef0d206` en los fronts, iguales en QA y PROD, y coinciden con el digest linux/amd64 de ghcr.io). A Render lo configuré con `sha-8d0f9b8…` (el merge de entonces): es sólo el punto de partida, lo que corre lo nombra cada deploy. _Manual Deploy_ despliega esa imagen vieja de Settings, por eso no lo uso.
+
+**De la release a la imagen.** `git rev-list -n1 v7.0.0` da el commit, y `sha-<ese commit>` está en los dos paquetes. Volver atrás es mandarle esa imagen al hook (no lo practiqué: el rollback es del TP6).
+
+**Cómo compruebo que un entorno ejecuta mi imagen.** En _Deploys/Events_ de cada servicio dice «Triggered via Deploy Hook» y nombra el `sha-` de la corrida. Además hice que la imagen del backend lleve su commit (`ARG COMMIT_SHA` con `build-args: github.sha`) y que `/health` lo devuelva: el smoke falla si no coincide con la corrida (no es pedido por la guía, pero `RENDER_GIT_COMMIT` no existe en servicios por imagen y así sé qué corre sin entrar al panel). El smoke **no** prueba que el front use bien la api: el commit roto lo pasó en verde.
+
+**Qué elegí probar.** _Integración_ (api de QA, base real, sin dobles): (1) alta, verificación y borrado; (2) monto en cero → 400 y no se creó nada; (3) editar un gasto persiste el cambio. _e2e_ (navegador contra QA): (1) crear y eliminar; (2) monto en cero → alerta visible, botón deshabilitado, nada en la lista; (3) el gasto sigue ahí tras recargar (lo que mi usuario hace todos los días). Si se rompen, quien me escribe es quien carga y edita gastos. **Qué no puse:** no repito en e2e las reglas de negocio (categoría inválida, fecha futura, pagado → pendiente), que cubren los unitarios del TP5; y en integración **no** probé «marcar pagado» porque un gasto pagado no se puede eliminar, y habría dejado basura permanente en QA, que es compartido. Tampoco hice integración de front (Testing Library).
+
+**El par verde/rojo.** En la corrida roja (commit `270186f`: el front manda `amount` en vez de `monto`) el smoke y la integración quedaron verdes y la e2e roja: la api y la base están sanas, el que no usa bien la api es el front (fila 1 de la tabla de §2.5). La traza de la e2e (pestaña _Network_) muestra el `POST /api/gastos` con 400. Si hubiera roto la api, la integración habría quedado roja y la e2e no habría corrido (`needs`). El gate frenó la promoción y PROD nunca ejecutó ese commit. Un unitario con doble no ve esto: no ejercita el formulario ni el JSON real.
+
+**Integración amplia vs estrecha.** Usé la amplia (contra la api de QA ya desplegada). Gana: casi cero configuración, prueba el despliegue real y el driver real de Postgres, y reutiliza QA. Pierde: aislamiento, depende de la red y del free tier, comparte datos con otras corridas y da feedback recién después de desplegar.
+
+**Cold start y flaky.** QA duerme a los 15 minutos. El smoke y la integración lo despiertan antes de la e2e; Playwright espera solo (_auto-waiting_, sin `sleep`) con 60 s por test, 15 s por aserción y 1 reintento, y subo el reporte siempre (retención 90 días, para que dure hasta la defensa). Un test _flaky_ pasa o falla sin que cambie el código; es peor que no tener test porque entrena a ignorar el rojo. Un test que pasa recién al reintentar sale marcado flaky aunque la corrida esté verde, por eso abro el reporte igual.
+
+**Misma imagen del front en QA y PROD.** Por variable: `BACKEND_URL` y `DNS_RESOLVER` (plantilla de nginx). Adentro de la imagen: los estáticos y la plantilla. Prueba: el bundle de QA y de PROD es el mismo archivo y el digest coincide.
+
+**Límite conocido.** QA es uno solo. Con dos merges seguidos, la corrida B puede redesplegar QA mientras las suites de la A lo usan, y daría un rojo que no es del código o un verde que probó la imagen de B. Lo reconocería mirando el commit del `/health` de QA contra la corrida; la regla es un merge por vez y rechazar a mano la corrida vieja. Lo resolvería un entorno por corrida.
+
+**Problemas.** (1) descargué `npx` desde la raíz y bajó una segunda copia de Playwright y falló con «did not expect test() to be called»: corro desde `frontend/` con `--no-install`. (2) El reporte HTML que descargué se coló por `git add .` en el PR #40 y llegó a `main`: lo saqué en el #41 y agregué `reporte-*/` al `.gitignore`. (3) Apreté _Revert_ tras el merge: no creé el PR porque revertir un squash deshace el arreglo. (4) Borré por error una corrida de `main` creyendo que era del revert; la evidencia verde es la del #41. (7) `/health` leía `RENDER_GIT_COMMIT`, que no existe con imagen: lo reemplacé por `COMMIT_SHA` horneado.
+
+**Declaración de IA.** Usé Claude como guía paso a paso: me explicó los conceptos y me dio el código base del workflow, `db.go`/`main.go`, los specs de Playwright y los atributos de accesibilidad. Yo escribí y ejecuté cada cambio y configuré Render. Verifiqué leyendo cada corrida, con `curl` al `/health` de QA y PROD, contra los digests de ghcr.io, con los reportes de Playwright y los _Events_ de Render. Puedo explicar qué verifica cada test, contra qué entorno corre y qué pasa si falla.
