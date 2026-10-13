@@ -22,3 +22,6 @@ backend/coverage.out
 backend/coverage_filtrado.out
 backend/coverage-local/
 frontend/coverage/
+
+playwright-report/
+test-results/
