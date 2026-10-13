@@ -31,7 +31,7 @@ export default function GastoForm({ onCrear }) {
     try {
       await onCrear({
         ...form,
-        amount: Number(form.monto),
+        monto: Number(form.monto),
         fecha: new Date(form.fecha).toISOString(),
       })
       setForm(vacio)
