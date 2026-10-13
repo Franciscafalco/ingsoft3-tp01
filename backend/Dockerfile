@@ -16,6 +16,8 @@ ENTRYPOINT ["go", "test", "./...", "-coverprofile=/out/coverage.out"]
 # ---- Etapa 3: runtime (imagen mínima, sin el SDK) ----
 FROM alpine:3.20 AS final
 LABEL org.opencontainers.image.source=https://github.com/Franciscafalco/ingsoft3-tp01
+ARG COMMIT_SHA=desconocido
+ENV COMMIT_SHA=$COMMIT_SHA
 WORKDIR /app
 COPY --from=build /app/server .
 EXPOSE 8080
