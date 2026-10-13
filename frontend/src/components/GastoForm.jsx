@@ -55,7 +55,11 @@ export default function GastoForm({ onCrear }) {
           onChange={(e) => actualizarCampo('monto', e.target.value)}
           placeholder="0.00"
         />
-        {montoInvalido && <span className="campo-error">El monto debe ser mayor a 0</span>}
+        {montoInvalido && (
+          <span className="campo-error" role="alert">
+            El monto debe ser mayor a 0
+          </span>
+        )}
       </label>
 
       <label>
@@ -90,14 +94,22 @@ export default function GastoForm({ onCrear }) {
           max={hoy()}
           onChange={(e) => actualizarCampo('fecha', e.target.value)}
         />
-        {fechaFutura && <span className="campo-error">La fecha no puede ser futura</span>}
+        {fechaFutura && (
+          <span className="campo-error" role="alert">
+            La fecha no puede ser futura
+          </span>
+        )}
       </label>
 
       <button type="submit" disabled={!puedeEnviar}>
         {enviando ? 'Guardando…' : 'Agregar gasto'}
       </button>
 
-      {error && <p className="error">{error}</p>}
+      {error && (
+        <p className="error" role="alert">
+          {error}
+        </p>
+      )}
     </form>
   )
 }

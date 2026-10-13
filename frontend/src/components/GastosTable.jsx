@@ -35,6 +35,7 @@ export default function GastosTable({ gastos, onMarcarPagado, onEliminar }) {
               )}
               <button
                 type="button"
+                aria-label={`Eliminar ${g.descripcion || g.categoria}`}
                 disabled={g.estado === 'pagado'}
                 title={g.estado === 'pagado' ? 'No se puede eliminar un gasto pagado' : undefined}
                 onClick={() => onEliminar(g)}

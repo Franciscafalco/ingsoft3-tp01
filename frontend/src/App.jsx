@@ -94,7 +94,11 @@ export default function App() {
         </nav>
       </header>
 
-      {error && <p className="error error-global">{error}</p>}
+      {error && (
+        <p className="error error-global" role="alert">
+          {error}
+        </p>
+      )}
 
       {vista === 'gastos' ? (
         <main className="contenido-gastos">
