@@ -22,7 +22,7 @@ func main() {
 	router := gin.Default()
 
 	router.GET("/health", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"status": "ok", "commit": os.Getenv("RENDER_GIT_COMMIT")})
+		c.JSON(http.StatusOK, gin.H{"status": "ok", "commit": os.Getenv("COMMIT_SHA")})
 	})
 
 	api := router.Group("/api")
