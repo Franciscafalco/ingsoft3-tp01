@@ -25,3 +25,9 @@ frontend/coverage/
 
 playwright-report/
 test-results/
+
+# Terraform: el estado tiene contraseñas en texto plano
+*.tfstate
+*.tfstate.*
+.terraform/
+*.tfvars
