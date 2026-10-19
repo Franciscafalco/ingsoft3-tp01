@@ -1,0 +1,19 @@
+version: 2
+updates:
+  - package-ecosystem: "gomod" # las dependencias del backend (Go)
+    directory: "/backend"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 3
+
+  - package-ecosystem: "npm" # las del frontend
+    directory: "/frontend"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 3
+
+  - package-ecosystem: "github-actions" # tus actions también son dependencias
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 3
