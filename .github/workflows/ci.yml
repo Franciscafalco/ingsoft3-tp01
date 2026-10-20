@@ -6,6 +6,9 @@ on:
   push:
     branches: [main] # ← sólo para que main tenga su corrida (la que lee el badge, §3.5)
 
+permissions:
+  contents: read
+
 jobs:
   build-backend:
     runs-on: ubuntu-24.04
