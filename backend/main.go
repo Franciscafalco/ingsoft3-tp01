@@ -42,11 +42,6 @@ func main() {
 		c.JSON(http.StatusOK, gin.H{"status": "ok", "commit": os.Getenv("COMMIT_SHA")})
 	})
 
-	// TEMPORAL (TP9): fuerza un error para verlo en Sentry. Se saca al terminar el práctico.
-	router.GET("/api/falla", func(c *gin.Context) {
-		panic("Falla de prueba del TP9")
-	})
-
 	api := router.Group("/api")
 	{
 		api.GET("/gastos", gastosHandler.Listar)
